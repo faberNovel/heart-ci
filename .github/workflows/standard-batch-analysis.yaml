@@ -1,0 +1,125 @@
+name: Run a batch analysis with Dareboost and Slack
+
+on:
+  workflow_call:
+    inputs:
+      config-directory:
+        description: Path to directory holding configuration files
+        required: false
+        type: string
+        default: ./ci/heart/config
+      heart-image-name:
+        description: Name of the Heart Docker image to be used
+        required: true
+        type: string
+    secrets:
+      DAREBOOST_API_TOKEN:  
+        description: Dareboost API Token
+        required: true
+      SLACK_API_TOKEN:
+        description: Slack API Token
+        required: true
+      SLACK_CHANNEL_ID:
+        description: Name of the Slack channel on which to send notifications
+        required: true
+    outputs:
+      results:
+        description: Standard outputs of launched containers
+        value: ${{ jobs.run-heart-analyses.analysis-step.outputs.results }}
+
+env:
+  CACHE_DIRECTORY_NAME: cache
+
+jobs:
+  scan-conf-files:
+    name: Look for configuration files in configuration directory
+    runs-on: [self-hosted, docker]
+
+    outputs: 
+      files: ${{ steps.step2.outputs.files }}
+
+    steps:
+      - name: Repository Checkout
+        id: step1
+        uses: actions/checkout@v2
+      - name: Find all JSON files in ${{ inputs.config-directory }}
+        id: step2
+        working-directory: "${{ inputs.config-directory }}"
+        run: |
+          echo "::set-output name=files::$(find . -name "*.json" | jq -R -s -c 'split("\n")[:-1]')"
+
+  pull-and-cache-heart-image:
+    name: Pull and cache Heart Docker image from Organisation DockerHub
+    runs-on:  [self-hosted, docker]
+
+    steps:
+      # - name: Login to GitHub container registry
+      #   run: docker login ghcr.io -u "${{ secrets.username }}" -p ${{ secrets.password }}
+      - name: Cache Docker image archive
+        id: cache
+        uses: actions/cache@v2
+        with:
+          path: ~/${{ env.CACHE_DIRECTORY_NAME }}
+          key: ${{ inputs.heart-image-name }}
+      - name: Create cache folder if not already present
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          cd ~
+          mkdir ${{ env.CACHE_DIRECTORY_NAME }}
+      - name: Pull Heart Docker image
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          docker pull ${{ inputs.heart-image-name }}
+      - name: Retrieve image tag from full image name
+        run: |
+          var=$(echo "${{ inputs.heart-image-name }}" | cut -d '/' -f2)
+          echo "IMAGE_TAG=$var" >> $GITHUB_ENV
+        id: step4
+      - name: Cache Heart Docker image as .tar.gz file
+        if: steps.cache.outputs.cache-hit != 'true'
+        run: |
+          cd ~/${{ env.CACHE_DIRECTORY_NAME }}
+          docker save ${{ inputs.image-name }} | gzip > ~/${{ inputs.cache-directory }}/${{ env.IMAGE_TAG }}.tar.gz
+
+  run-heart-analyses:
+    name: Launch batch standard analysis (Dareboost + Slack)
+    runs-on: [self-hosted, docker]
+    needs: [scan-conf-files, pull-and-cache-heart-image]
+
+    strategy:
+      matrix:
+        conf-file-name: ${{ fromJson(needs.scan-conf-files.files) }}
+      max-parallel: 1
+    
+    steps:
+      - name: Repository Checkout
+        uses: actions/checkout@v2
+      - name: Cache Docker image (as tar.gz)
+        uses: actions/cache@v2
+        with:
+          path: ~/cache
+          key: ${{ inputs.heart-image-name }}
+      - name: Load Heart image from cache
+        run: docker load -i ~/cache/heart-image.tar.gz
+      - name: Retrieve module name from configuration file path
+        run: |
+          var=$(echo "${{ matrix.conf-file-name }}" | cut -d '/' -f2)
+          echo "module=$var" >> $GITHUB_ENV
+      - name: Dareboost Analysis
+        id: analysis-step
+        if: ${{ env.module == 'dareboost' }}
+        run: >
+          echo "::set-output name=results::$(
+          docker run --rm -i
+          -e DAREBOOST_API_TOKEN=${{ secrets.DAREBOOST_API_TOKEN }}
+          -e SLACK_API_TOKEN=${{ secrets.SLACK_API_TOKEN }}
+          -e SLACK_CHANNEL_ID=${{ secrets.SLACK_CHANNEL_ID }}
+          -v $(pwd)/${{ inputs.config-directory }}:/usr/heart/${{ inputs.config-directory }}
+          ${{ inputs.image-name }}
+          dareboost --help
+          )"
+      #           --file '${{inputs.config-directory}}/${{ matrix.conf-file-name }}'
+
+      # - name: Check failures
+      #   if: steps.step5.outcome != 'success'
+      #   run: exit 1 

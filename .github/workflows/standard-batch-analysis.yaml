@@ -12,6 +12,10 @@ on:
         description: Name of the Heart Docker image to be used
         required: true
         type: string
+      repository: 
+        description: GitHub repository to be analysed using Heart, e.g. octocat/Hello-World
+        required: true
+        type: string
     secrets:
       DAREBOOST_API_TOKEN:  
         description: Dareboost API Token
@@ -22,9 +26,6 @@ on:
       SLACK_CHANNEL_ID:
         description: Name of the Slack channel on which to send notifications
         required: true
-      token:
-        description: Github PAT
-        required: false
     outputs:
       results:
         description: Standard outputs of launched containers
@@ -32,6 +33,7 @@ on:
 
 env:
   CACHE_DIRECTORY_NAME: cache
+  DEFAULT_CHECKOUT_PATH: checkout
 
 jobs:
   scan-conf-files:
@@ -42,21 +44,17 @@ jobs:
       files: ${{ steps.step2.outputs.files }}
 
     steps:
-      - name: Repository Checkout
+      - name: Checkout remote repository to be analysed
         id: step1
-        uses: actions/checkout@v3
+        uses: actions/checkout@v2
         with:
-          token: ${{ secrets.token }}
+          repository: $${{ inputs.repository }}
+          path: ${{ env.DEFAULT_CHECKOUT_PATH }}
       - name: Find all JSON files in ${{ inputs.config-directory }}
         id: step2
-        working-directory: "${{ inputs.config-directory }}"
+        working-directory: ${{ env.DEFAULT_CHECKOUT_PATH }}/${{ inputs.config-directory }}
         run: |
           echo "::set-output name=files::$(find . -name "*.json" | jq -R -s -c 'split("\n")[:-1]')"
-      - name: Check find command output
-        run: find . -name "*.json" | jq -R -s -c 'split("\n")[:-1]'
-        working-directory: "${{ inputs.config-directory }}"
-      - name: Check step 2 output
-        run: echo ${{ steps.step2.outputs.files }}
 
   pull-and-cache-heart-image:
     name: Pull and cache Heart Docker image from Organisation DockerHub
@@ -102,15 +100,18 @@ jobs:
       max-parallel: 1
     
     steps:
-      - name: Repository Checkout
+      - name: Checkout remote repository to be analysed
         uses: actions/checkout@v2
+        with:
+          repository: $${{ inputs.repository }}
+          path: ${{ env.DEFAULT_CHECKOUT_PATH }}
       - name: Cache Docker image (as tar.gz)
         uses: actions/cache@v2
         with:
           path: ~/cache
           key: ${{ inputs.heart-image-name }}
       - name: Load Heart image from cache
-        run: docker load -i ~/cache/heart-image.tar.gz
+        run: docker load -i ~/${{ inputs.cache-directory }}/${{ env.IMAGE_TAG }}.tar.gz
       - name: Retrieve module name from configuration file path
         run: |
           var=$(echo "${{ matrix.conf-file-name }}" | cut -d '/' -f2)
@@ -124,7 +125,7 @@ jobs:
           -e DAREBOOST_API_TOKEN=${{ secrets.DAREBOOST_API_TOKEN }}
           -e SLACK_API_TOKEN=${{ secrets.SLACK_API_TOKEN }}
           -e SLACK_CHANNEL_ID=${{ secrets.SLACK_CHANNEL_ID }}
-          -v $(pwd)/${{ inputs.config-directory }}:/usr/heart/${{ inputs.config-directory }}
+          -v $(pwd)/${{ env.DEFAULT_CHECKOUT_PATH }}/${{ inputs.config-directory }}:/usr/heart/${{ inputs.config-directory }}
           ${{ inputs.image-name }}
           dareboost --help
           )"

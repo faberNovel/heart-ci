@@ -48,6 +48,7 @@ jobs:
         run: |
           echo "::set-output name=files::$(find . -name "*.json" | jq -R -s -c 'split("\n")[:-1]')"
       - run: find . -name "*.json" | jq -R -s -c 'split("\n")[:-1]'
+        working-directory: "${{ inputs.config-directory }}"
 
   pull-and-cache-heart-image:
     name: Pull and cache Heart Docker image from Organisation DockerHub

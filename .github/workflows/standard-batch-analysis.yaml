@@ -22,6 +22,9 @@ on:
       SLACK_CHANNEL_ID:
         description: Name of the Slack channel on which to send notifications
         required: true
+      token:
+        description: Github PAT
+        required: false
     outputs:
       results:
         description: Standard outputs of launched containers
@@ -41,7 +44,9 @@ jobs:
     steps:
       - name: Repository Checkout
         id: step1
-        uses: actions/checkout@v2
+        uses: actions/checkout@v3
+        with:
+          token: ${{ secrets.token }}
       - name: Find all JSON files in ${{ inputs.config-directory }}
         id: step2
         working-directory: "${{ inputs.config-directory }}"

@@ -53,6 +53,8 @@ jobs:
   pull-and-cache-heart-image:
     name: Pull and cache Heart Docker image from Organisation DockerHub
     runs-on:  [self-hosted, docker]
+    outputs:
+      image-tag: ${{ steps.step4.outputs.image_tag}}
 
     steps:
       # - name: Login to GitHub container registry
@@ -74,14 +76,14 @@ jobs:
           docker pull ${{ inputs.heart-image-name }}
       - name: Retrieve image tag from full image name
         run: |
-          var=$(echo "${{ inputs.heart-image-name }}" | cut -d '/' -f2)
-          echo "IMAGE_TAG=$var" >> $GITHUB_ENV
+          echo "image_tag=$(echo "${{ inputs.heart-image-name }}" | cut -d '/' -f2)" >> $GITHUB_ENV
+          echo "::set-output name=image_tag::$(echo $image_tag)"
         id: step4
       - name: Cache Heart Docker image as .tar.gz file
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           cd ~/${{ env.CACHE_DIRECTORY_NAME }}
-          docker save ${{ inputs.image-name }} | gzip > ~/${{ inputs.cache-directory }}/${{ env.IMAGE_TAG }}.tar.gz
+          docker save ${{ inputs.image-name }} | gzip > ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ env.image_tag }}.tar.gz
 
   run-heart-analyses:
     name: Launch batch standard analysis (Dareboost + Slack)
@@ -102,7 +104,7 @@ jobs:
           path: ~/cache
           key: ${{ inputs.heart-image-name }}
       - name: Load Heart image from cache
-        run: docker load -i ~/${{ inputs.cache-directory }}/${{ env.IMAGE_TAG }}.tar.gz
+        run: docker load -i ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ needs.pull-and-cache-heart-image.outputs.image_tag }}.tar.gz
       - name: Retrieve module name from configuration file path
         run: |
           var=$(echo "${{ matrix.conf-file-name }}" | cut -d '/' -f2)

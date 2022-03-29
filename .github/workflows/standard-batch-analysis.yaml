@@ -26,6 +26,9 @@ on:
       SLACK_CHANNEL_ID:
         description: Name of the Slack channel on which to send notifications
         required: true
+      token:
+        description: GitHub PAT to repository to be analysed using Heart
+        required: false
     outputs:
       results:
         description: Standard outputs of launched containers
@@ -50,6 +53,7 @@ jobs:
         with:
           repository: $${{ inputs.repository }}
           path: ${{ env.DEFAULT_CHECKOUT_PATH }}
+          token: $${{ secrets.token }}
       - name: Find all JSON files in ${{ inputs.config-directory }}
         id: step2
         working-directory: ${{ env.DEFAULT_CHECKOUT_PATH }}/${{ inputs.config-directory }}
@@ -105,6 +109,7 @@ jobs:
         with:
           repository: $${{ inputs.repository }}
           path: ${{ env.DEFAULT_CHECKOUT_PATH }}
+          token: $${{ secrets.token }}
       - name: Cache Docker image (as tar.gz)
         uses: actions/cache@v2
         with:

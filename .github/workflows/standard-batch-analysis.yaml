@@ -93,7 +93,7 @@ jobs:
 
     strategy:
       matrix:
-        conf-file-name: ${{ fromJson(needs.scan-conf-files.files) }}
+        conf-file-name: ${{ fromJson(needs.scan-conf-files.outputs.files) }}
       max-parallel: 1
     
     steps:

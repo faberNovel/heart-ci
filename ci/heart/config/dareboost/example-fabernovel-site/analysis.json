@@ -1,0 +1,10 @@
+{
+    "url": "http://fabernovel.com",
+    "lang": "fr",
+    "location": "Paris",
+    "browser": {
+        "name": "Chrome"
+    },
+    "mobileAnalysis": false,
+    "isPrivate": true
+}

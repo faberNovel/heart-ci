@@ -1,0 +1,31 @@
+name: Website performance analysis
+
+on:
+  push:
+    branches:
+      - preprod
+
+  workflow_dispatch: ~
+  schedule:
+    # Every Monday at 10:00
+    - cron: '0 10 * * 1'
+
+jobs:
+  analysis:
+    uses: faberNovel/heart-ci/.github/workflows/standard-batch-analysis.yaml@main
+    with:
+      heart-image-name: "fabernovel/heart:standard"
+    secrets:
+      DAREBOOST_API_TOKEN: test1
+      SLACK_API_TOKEN: test2
+      SLACK_CHANNEL_ID: test3
+
+  use-results:
+    name: Check result
+    needs: [analysis]
+    runs-on: [self-hosted, docker]
+    container:
+      image: docker://node:14-buster
+
+    steps:
+      - run: echo ${{ needs.analysis.outputs.results }}

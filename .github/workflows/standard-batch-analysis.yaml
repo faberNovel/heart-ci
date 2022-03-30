@@ -59,8 +59,6 @@ jobs:
       image-owner: ${{ steps.image-info.outputs.image-owner }}
 
     steps:
-      # - name: Login to GitHub container registry
-      #   run: docker login ghcr.io -u "${{ secrets.username }}" -p ${{ secrets.password }}
       - name: Retrieve image tag and image name from full image name
         run: |
           echo "::set-output name=image-owner::$(echo "${{ inputs.heart-image-name }}" | cut -d '/' -f1)"
@@ -123,9 +121,8 @@ jobs:
           -e SLACK_CHANNEL_ID=${{ secrets.SLACK_CHANNEL_ID }}
           -v $(pwd)/${{ inputs.config-directory }}:/usr/heart/${{ inputs.config-directory }}
           ${{ inputs.image-name }}
-          dareboost --help
+          dareboost --file '${{inputs.config-directory}}/${{ matrix.conf-file-name }}'
           )"
-      #           --file '${{inputs.config-directory}}/${{ matrix.conf-file-name }}'
 
       - name: Check failures
         # if: steps.analysis-step.outcome != 'success'

@@ -25,7 +25,8 @@ on:
       DOCKER_USERNAME:
         description: Username used to access organisation Dockerhub
         required: true
-      DOCKER_TOKEN: Token used to access organisation Dockerhub
+      DOCKER_TOKEN: 
+        description: Token used to access organisation Dockerhub
         required: true
     outputs:
       results:

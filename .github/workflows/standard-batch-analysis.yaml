@@ -22,6 +22,11 @@ on:
       SLACK_CHANNEL_ID:
         description: Name of the Slack channel on which to send notifications
         required: true
+      DOCKER_USERNAME:
+        description: Username used to access organisation Dockerhub
+        required: true
+      DOCKER_TOKEN: Token used to access organisation Dockerhub
+        required: true
     outputs:
       results:
         description: Standard outputs of launched containers
@@ -76,6 +81,8 @@ jobs:
         run: |
           cd ~
           mkdir ${{ env.CACHE_DIRECTORY_NAME }}
+      - name: Login to organisation container registry
+         run: docker login -u "${{ secrets.DOCKER_USERNAME }}" -p ${{ secrets.DOCKER_TOKEN }}
       - name: Pull Heart Docker image
         if: steps.cache.outputs.cache-hit != 'true'
         run: |

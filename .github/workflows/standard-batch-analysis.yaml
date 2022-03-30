@@ -40,8 +40,7 @@ jobs:
   scan-conf-files:
     name: Look for configuration files in configuration directory
     runs-on: [self-hosted, docker]
-    container:
-      image: docker://node:14-buster
+
     outputs: 
       files: ${{ steps.step2.outputs.files }}
 
@@ -60,9 +59,7 @@ jobs:
   pull-and-cache-heart-image:
     name: Pull and cache Heart Docker image from Organisation DockerHub
     runs-on:  [self-hosted, docker]
-    container:
-      image: docker://node:14-buster
-
+    
     outputs:
       image-tag: ${{ steps.image-info.outputs.image-tag }}
       image-name: ${{ steps.image-info.outputs.image-name }}
@@ -101,8 +98,6 @@ jobs:
   run-heart-analyses:
     name: Launch batch standard analysis (Dareboost + Slack)
     runs-on: [self-hosted, docker]
-    container:
-      image: docker://node:14-buster
     needs: [scan-conf-files, pull-and-cache-heart-image]
 
     strategy:

@@ -83,7 +83,7 @@ jobs:
           cd ~
           mkdir ${{ env.CACHE_DIRECTORY_NAME }}
       - name: Login to organisation container registry
-         run: docker login -u "${{ secrets.DOCKER_USERNAME }}" -p ${{ secrets.DOCKER_TOKEN }}
+        run: docker login -u "${{ secrets.DOCKER_USERNAME }}" -p ${{ secrets.DOCKER_TOKEN }}
       - name: Pull Heart Docker image
         if: steps.cache.outputs.cache-hit != 'true'
         run: |

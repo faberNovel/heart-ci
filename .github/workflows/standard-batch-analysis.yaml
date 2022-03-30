@@ -54,17 +54,25 @@ jobs:
     name: Pull and cache Heart Docker image from Organisation DockerHub
     runs-on:  [self-hosted, docker]
     outputs:
-      image-tag: ${{ steps.step4.outputs.image_tag}}
+      image-tag: ${{ steps.image-info.outputs.image-tag }}
+      image-name: ${{ steps.image-info.outputs.image-name }}
+      image-owner: ${{ steps.image-info.outputs.image-owner }}
 
     steps:
       # - name: Login to GitHub container registry
       #   run: docker login ghcr.io -u "${{ secrets.username }}" -p ${{ secrets.password }}
+      - name: Retrieve image tag and image name from full image name
+        run: |
+          echo "::set-output name=image-owner::$(echo "${{ inputs.heart-image-name }}" | cut -d '/' -f1)"
+          echo "::set-output name=image-name::$(echo "${{ inputs.heart-image-name }}" | cut -d '/' -f2 | cut -d ':' -f1)"
+          echo "::set-output name=image-tag::$(echo "${{ inputs.heart-image-name }}" | cut -d '/' -f2 | cut -d ':' -f2)"
+        id: image-info
       - name: Cache Docker image archive
         id: cache
         uses: actions/cache@v2
         with:
           path: ~/${{ env.CACHE_DIRECTORY_NAME }}
-          key: ${{ inputs.heart-image-name }}
+          key: ${{ steps.image-info.outputs.image-owner }}-${{ steps.image-info.outputs.image-name }}-${{ steps.image-info.outputs.image-tag }}
       - name: Create cache folder if not already present
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
@@ -74,16 +82,11 @@ jobs:
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           docker pull ${{ inputs.heart-image-name }}
-      - name: Retrieve image tag from full image name
-        run: |
-          echo "image_tag=$(echo "${{ inputs.heart-image-name }}" | cut -d '/' -f2)" >> $GITHUB_ENV
-          echo "::set-output name=image_tag::$(echo $image_tag)"
-        id: step4
       - name: Cache Heart Docker image as .tar.gz file
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           cd ~/${{ env.CACHE_DIRECTORY_NAME }}
-          docker save ${{ inputs.image-name }} | gzip > ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ env.image_tag }}.tar.gz
+          docker save ${{ inputs.image-name }} | gzip > ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ steps.image-info.outputs.image-owner }}-${{ steps.image-info.outputs.image-name }}-${{ steps.image-info.outputs.image-tag }}.tar.gz
 
   run-heart-analyses:
     name: Launch batch standard analysis (Dareboost + Slack)
@@ -102,9 +105,9 @@ jobs:
         uses: actions/cache@v2
         with:
           path: ~/cache
-          key: ${{ inputs.heart-image-name }}
+          key: ${{ needs.pull-and-cache-heart-image.steps.image-info.outputs.image-owner }}-${{ needs.pull-and-cache-heart-image.steps.image-info.outputs.image-name }}-${{ needs.pull-and-cache-heart-image.steps.image-info.outputs.image-tag }}
       - name: Load Heart image from cache
-        run: docker load -i ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ needs.pull-and-cache-heart-image.outputs.image_tag }}.tar.gz
+        run: docker load -i ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ needs.pull-and-cache-heart-image.outputs.image_owner }}-${{ needs.pull-and-cache-heart-image.outputs.image_name }}-${{ needs.pull-and-cache-heart-image.outputs.image_tag }}.tar.gz
       - name: Retrieve module name from configuration file path
         run: |
           var=$(echo "${{ matrix.conf-file-name }}" | cut -d '/' -f2)
@@ -124,6 +127,7 @@ jobs:
           )"
       #           --file '${{inputs.config-directory}}/${{ matrix.conf-file-name }}'
 
-      # - name: Check failures
-      #   if: steps.step5.outcome != 'success'
-      #   run: exit 1 
+      - name: Check failures
+        # if: steps.analysis-step.outcome != 'success'
+        # run: exit 1 
+        run: echo ${{ steps.analysis-step.outputs.results }}

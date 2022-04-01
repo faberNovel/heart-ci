@@ -109,17 +109,17 @@ jobs:
       max-parallel: 1
 
     steps:
-      - name: Check presence of configuration files
-        if: ${{ always() }}
-        run: |
-          cd ${{ inputs.config-directory }}
-          ls -la
-
       - name: Cache Docker image (as tar.gz)
         uses: actions/cache@v2
         with:
           path: ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ needs.get-image.outputs.image-owner }}-${{ needs.get-image.outputs.image-name }}-${{ needs.get-image.outputs.image-tag }}.tar.gz
           key: ${{ needs.get-image.outputs.image-owner }}-${{ needs.get-image.outputs.image-name }}-${{ needs.get-image.outputs.image-tag }}
+
+      - name: Check presence of configuration files
+        if: ${{ always() }}
+        run: |
+          cd ${{ inputs.config-directory }}
+          ls -la
 
       - name: Load Heart image from cache
         run: docker load -i ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ needs.get-image.outputs.image-owner }}-${{ needs.get-image.outputs.image-name }}-${{ needs.get-image.outputs.image-tag }}.tar.gz
@@ -132,8 +132,8 @@ jobs:
       - name: Remove existing containers and volumes
         continue-on-error: true
         run: |
-          docker rm -f $(docker ps -a -q)
-          docker volume rm $(docker volume ls -q)
+          docker rm -f $(docker ps -a -q) || true
+          docker volume rm $(docker volume ls -q) || true
 
       - name: Launch single Heart Analysis
         if: ${{ env.module == 'dareboost' }}
@@ -161,5 +161,5 @@ jobs:
       - name: Remove created Docker container
         if: ${{ always() }}
         run: |
-          docker rm -f $(docker ps -a -q)
-          docker volume rm $(docker volume ls -q)
+          docker rm -f $(docker ps -a -q) || true
+          docker volume rm $(docker volume ls -q) || true

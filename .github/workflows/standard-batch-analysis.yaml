@@ -27,10 +27,16 @@ on:
         description: Name of the Slack channel on which to send notifications
         required: true
 
+#
+# Environment variables used in the current workflow
+#
 env:
   CACHE_DIRECTORY_NAME: cache-heart
   DEFAULT_CONTAINER_NAME: heart-container
 
+#
+# Definition of jobs
+#
 jobs:
   scan-conf-files:
     name: Look for configuration files in ${{ inputs.config-directory }}

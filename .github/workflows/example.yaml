@@ -3,7 +3,7 @@ name: Website performance analysis
 # Github Events Documentation: 
 on:
   # Trigger event - example 1
-  push
+  push:
     branches:
       - '**'
       # - 'preprod'

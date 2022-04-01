@@ -1,32 +1,45 @@
 name: Website performance analysis
 
+# Github Events Documentation: 
 on:
+  # Trigger event - example 1
   push
-  #   branches:
-  #     - preprod
+    branches:
+      - '**'
+      # - 'preprod'
 
-  # workflow_dispatch: ~
-  # schedule:
-  #   - cron: '0 10 * * 1'
+  # Trigger event - example 2
+  workflow_dispatch: ~
+  schedule:
+    # Every Monday at 10:00 AM
+    - cron: '0 10 * * 1'
 
 jobs:
+
+  # Documentation : https://github.com/github/super-linter
+  lint:
+    runs-on: [self-hosted, docker]
+    name: Lint Code
+
+    steps:
+      - name: Checkout Code
+        uses: actions/checkout@v3
+        with:
+          fetch-depth: 0
+
+      - name: Lint Code
+        uses: github/super-linter@v4
+        env:
+          VALIDATE_ALL_CODEBASE: true
+          DEFAULT_BRANCH: main
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  # Run a series of Heart analyses based on configuration files
   analysis:
     uses: ./.github/workflows/standard-batch-analysis.yaml
     with:
       heart-image-name: fabernovel/heart:standard
     secrets:
-      DAREBOOST_API_TOKEN: test1
-      SLACK_API_TOKEN: test2
-      SLACK_CHANNEL_ID: test3
-      DOCKER_USERNAME: ${{ secrets.DOCKER_USERNAME }}
-      DOCKER_TOKEN: ${{ secrets.DOCKER_TOKEN }}
-
-  use-results:
-    name: Check result
-    needs: [analysis]
-    runs-on: [self-hosted, docker]
-    container:
-      image: docker://node:14-buster
-
-    steps:
-      - run: echo ${{ needs.analysis.outputs.results }}
+      DAREBOOST_API_TOKEN: ${{ secrets.DAREBOOST_API_TOKEN }}
+      SLACK_API_TOKEN: ${{ secrets.SLACK_API_TOKEN }}
+      SLACK_CHANNEL_ID: ${{ secrets.SLACK_CHANNEL_ID }}

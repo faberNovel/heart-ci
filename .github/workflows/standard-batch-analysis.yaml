@@ -1,3 +1,6 @@
+#
+# Documentation : https://github.com/faberNovel/heart-ci
+#
 name: Run a batch analysis with Dareboost and Slack
 
 on:
@@ -7,13 +10,14 @@ on:
         description: Path to directory holding configuration files
         required: false
         type: string
-        default: ./ci/heart/config
+        default: ci/heart/config
       heart-image-name:
         description: Name of the Heart Docker image to be used
         required: true
         type: string
+
     secrets:
-      DAREBOOST_API_TOKEN:  
+      DAREBOOST_API_TOKEN:
         description: Dareboost API Token
         required: true
       SLACK_API_TOKEN:
@@ -22,44 +26,48 @@ on:
       SLACK_CHANNEL_ID:
         description: Name of the Slack channel on which to send notifications
         required: true
-      DOCKER_USERNAME:
-        description: Username used to access organisation Dockerhub
+      GH_TOKEN:
+        description: A GitHub personal access token
         required: true
-      DOCKER_TOKEN: 
-        description: Token used to access organisation Dockerhub
-        required: true
-    outputs:
-      results:
-        description: Standard outputs of launched containers
-        value: ${{ jobs.run-heart-analyses.analysis-step.outputs.results }}
 
+
+#
+# Environment variables used in the current workflow
+#
 env:
-  CACHE_DIRECTORY_NAME: cache
+  CACHE_DIRECTORY_NAME: cache-heart
+  DEFAULT_CONTAINER_NAME: heart-container
 
+#
+# Definition of jobs
+#
 jobs:
   scan-conf-files:
-    name: Look for configuration files in configuration directory
+    name: Look for configuration files in ${{ inputs.config-directory }}
     runs-on: [self-hosted, docker]
+    container:
+      image: docker://everpeace/curl-jq:latest
 
-    outputs: 
+    outputs:
       files: ${{ steps.step2.outputs.files }}
 
     steps:
-      - name: Repository Checkout
-        id: step1
+      - name: Checkout files
         uses: actions/checkout@v2
+
       - name: Find all JSON files in ${{ inputs.config-directory }}
         id: step2
-        working-directory: "${{ inputs.config-directory }}"
+        working-directory: ${{ inputs.config-directory }}
         run: |
           echo "::set-output name=files::$(find . -name "*.json" | jq -R -s -c 'split("\n")[:-1]')"
-      - run: find . -name "*.json" | jq -R -s -c 'split("\n")[:-1]'
-        working-directory: "${{ inputs.config-directory }}"
 
-  pull-and-cache-heart-image:
+      - run: find . -name "*.json" | jq -R -s -c 'split("\n")[:-1]'
+        working-directory: ${{ inputs.config-directory }}
+
+  get-image:
     name: Pull and cache Heart Docker image from Organisation DockerHub
-    runs-on:  [self-hosted, docker]
-    
+    runs-on: [self-hosted, docker]
+
     outputs:
       image-tag: ${{ steps.image-info.outputs.image-tag }}
       image-name: ${{ steps.image-info.outputs.image-name }}
@@ -72,68 +80,86 @@ jobs:
           echo "::set-output name=image-name::$(echo "${{ inputs.heart-image-name }}" | cut -d '/' -f2 | cut -d ':' -f1)"
           echo "::set-output name=image-tag::$(echo "${{ inputs.heart-image-name }}" | cut -d '/' -f2 | cut -d ':' -f2)"
         id: image-info
+
       - name: Cache Docker image archive
         id: cache
         uses: actions/cache@v2
         with:
-          path: ~/${{ env.CACHE_DIRECTORY_NAME }}
+          path: |
+            ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ steps.image-info.outputs.image-owner }}-${{ steps.image-info.outputs.image-name }}-${{ steps.image-info.outputs.image-tag }}.tar.gz
           key: ${{ steps.image-info.outputs.image-owner }}-${{ steps.image-info.outputs.image-name }}-${{ steps.image-info.outputs.image-tag }}
+
       - name: Create cache folder if not already present
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           cd ~
-          mkdir ${{ env.CACHE_DIRECTORY_NAME }}
-      - name: Login to organisation container registry
-        run: docker login -u "${{ secrets.DOCKER_USERNAME }}" -p ${{ secrets.DOCKER_TOKEN }}
+          mkdir -p ${{ env.CACHE_DIRECTORY_NAME }}
+
       - name: Pull Heart Docker image
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
           docker pull ${{ inputs.heart-image-name }}
+
       - name: Cache Heart Docker image as .tar.gz file
         if: steps.cache.outputs.cache-hit != 'true'
         run: |
-          cd ~/${{ env.CACHE_DIRECTORY_NAME }}
-          docker save ${{ inputs.image-name }} | gzip > ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ steps.image-info.outputs.image-owner }}-${{ steps.image-info.outputs.image-name }}-${{ steps.image-info.outputs.image-tag }}.tar.gz
+          docker save ${{ inputs.heart-image-name }} | gzip > ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ steps.image-info.outputs.image-owner }}-${{ steps.image-info.outputs.image-name }}-${{ steps.image-info.outputs.image-tag }}.tar.gz
 
   run-heart-analyses:
     name: Launch batch standard analysis (Dareboost + Slack)
     runs-on: [self-hosted, docker]
-    needs: [scan-conf-files, pull-and-cache-heart-image]
+    needs: [scan-conf-files, get-image]
+    outputs:
+      status: ${{ steps.output-step.ouputs.status }}
 
     strategy:
+      fail-fast: false
       matrix:
         conf-file-name: ${{ fromJson(needs.scan-conf-files.outputs.files) }}
       max-parallel: 1
-    
+
     steps:
-      - name: Repository Checkout
-        uses: actions/checkout@v2
       - name: Cache Docker image (as tar.gz)
         uses: actions/cache@v2
         with:
-          path: ~/cache
-          key: ${{ needs.pull-and-cache-heart-image.steps.image-info.outputs.image-owner }}-${{ needs.pull-and-cache-heart-image.steps.image-info.outputs.image-name }}-${{ needs.pull-and-cache-heart-image.steps.image-info.outputs.image-tag }}
+          path: ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ needs.get-image.outputs.image-owner }}-${{ needs.get-image.outputs.image-name }}-${{ needs.get-image.outputs.image-tag }}.tar.gz
+          key: ${{ needs.get-image.outputs.image-owner }}-${{ needs.get-image.outputs.image-name }}-${{ needs.get-image.outputs.image-tag }}
+
       - name: Load Heart image from cache
-        run: docker load -i ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ needs.pull-and-cache-heart-image.outputs.image_owner }}-${{ needs.pull-and-cache-heart-image.outputs.image_name }}-${{ needs.pull-and-cache-heart-image.outputs.image_tag }}.tar.gz
+        run: docker load -i ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ needs.get-image.outputs.image-owner }}-${{ needs.get-image.outputs.image-name }}-${{ needs.get-image.outputs.image-tag }}.tar.gz
+
       - name: Retrieve module name from configuration file path
         run: |
           var=$(echo "${{ matrix.conf-file-name }}" | cut -d '/' -f2)
           echo "module=$var" >> $GITHUB_ENV
-      - name: Dareboost Analysis
-        id: analysis-step
+
+      - name: Remove existing container with same name
+        continue-on-error: true
+        run: docker container rm ${{ env.DEFAULT_CONTAINER_NAME }}
+
+      - name: Launch single Heart Analysis
         if: ${{ env.module == 'dareboost' }}
         run: >
-          echo "::set-output name=results::$(
-          docker run --rm -i
+          docker run -i
+          --name ${{ env.DEFAULT_CONTAINER_NAME }}
+          -a stdout
           -e DAREBOOST_API_TOKEN=${{ secrets.DAREBOOST_API_TOKEN }}
           -e SLACK_API_TOKEN=${{ secrets.SLACK_API_TOKEN }}
           -e SLACK_CHANNEL_ID=${{ secrets.SLACK_CHANNEL_ID }}
           -v $(pwd)/${{ inputs.config-directory }}:/usr/heart/${{ inputs.config-directory }}
-          ${{ inputs.image-name }}
-          dareboost --file '${{inputs.config-directory}}/${{ matrix.conf-file-name }}'
-          )"
+          ${{ inputs.heart-image-name }}
+          dareboost --file './${{inputs.config-directory }}/${{ matrix.conf-file-name }}'
 
-      - name: Check failures
-        # if: steps.analysis-step.outcome != 'success'
-        # run: exit 1 
-        run: echo ${{ steps.analysis-step.outputs.results }}
+      - name: Wait for container to exit
+        if: ${{ always() }}
+        run: docker wait ${{ env.DEFAULT_CONTAINER_NAME }}
+
+      - name: Check analysis logs
+        if: ${{ always() }}
+        id: status
+        run: |
+          docker logs ${{ env.DEFAULT_CONTAINER_NAME }}
+
+      - name: Remove created Docker container
+        if: ${{ always() }}
+        run: docker container rm ${{ env.DEFAULT_CONTAINER_NAME }}

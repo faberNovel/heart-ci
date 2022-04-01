@@ -16,6 +16,8 @@ on:
 
 jobs:
 
+  # This step is recommended as good practice.
+  # Comment this job if you do not want to run it.
   # Documentation : https://github.com/github/super-linter
   lint:
     runs-on: [self-hosted, docker]

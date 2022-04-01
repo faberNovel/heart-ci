@@ -53,7 +53,7 @@ jobs:
 
       - name: Find all JSON files in ${{ inputs.config-directory }}
         id: step2
-        working-directory: '${{ inputs.config-directory }}'
+        working-directory: ${{ inputs.config-directory }}
         run: |
           echo "::set-output name=files::$(find . -name "*.json" | jq -R -s -c 'split("\n")[:-1]')"
 

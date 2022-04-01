@@ -95,7 +95,7 @@ jobs:
         run: |
           docker save ${{ inputs.heart-image-name }} | gzip > ~/${{ env.CACHE_DIRECTORY_NAME }}/${{ steps.image-info.outputs.image-owner }}-${{ steps.image-info.outputs.image-name }}-${{ steps.image-info.outputs.image-tag }}.tar.gz
 
-  run-heart-analyses:
+  batch:
     name: Launch batch standard analysis (Dareboost + Slack)
     runs-on: [self-hosted, docker]
     needs: [scan-conf-files, get-image]
@@ -109,6 +109,12 @@ jobs:
       max-parallel: 1
 
     steps:
+      - name: Check presence of configuration files
+        if: ${{ always() }}
+        run: |
+          cd ${{ inputs.config-directory }}
+          ls -la
+
       - name: Cache Docker image (as tar.gz)
         uses: actions/cache@v2
         with:
@@ -140,7 +146,7 @@ jobs:
           -e SLACK_CHANNEL_ID=${{ secrets.SLACK_CHANNEL_ID }}
           -v $(pwd)/${{ inputs.config-directory }}:/usr/heart/${{ inputs.config-directory }}
           ${{ inputs.heart-image-name }}
-          dareboost --file './${{inputs.config-directory }}/${{ matrix.conf-file-name }}'
+          dareboost --file '${{inputs.config-directory }}/${{ matrix.conf-file-name }}'
 
       - name: Wait for container to exit
         if: ${{ always() }}
@@ -154,4 +160,6 @@ jobs:
 
       - name: Remove created Docker container
         if: ${{ always() }}
-        run: docker container rm ${{ env.DEFAULT_CONTAINER_NAME }}
+        run: |
+          docker rm -f $(docker ps -a -q)
+          docker volume rm $(docker volume ls -q)

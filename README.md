@@ -68,6 +68,17 @@ Intended for use with the **fabernovel/heart:standard** docker image, which supp
 - Pull the specified Docker image from DockerHub and cache it.
 - For each JSON configuration file, launch a Heart analysis through a Docker container. A successful analysis will result in a notification on the indicated Slack channel. Unsuccessful analyses will be indicated in Github Actions' run logs.
 
+**Inputs:**
+- heart-image-name: Name of the Docker image to use.
+
+**Outputs:**
+None. 
+
+**Secrets:**
+- DAREBOOST_API_TOKEN: Dareboost API Token to be used
+- SLACK_API_TOKEN: Slack API Token to be used to send notifications
+- SLACK_API_TOKEN: Name of the Slack channel to be notified
+
 ## example.yaml
 
 Simple example of workflow making use of the above workflow.
